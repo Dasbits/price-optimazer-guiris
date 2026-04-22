@@ -1,0 +1,57 @@
+# ── Entorno virtual ───────────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+
+# ── Credenciales y secretos (NUNCA subir al repo) ─────────────────────────────
+credentials.json
+*.json
+.env
+.env.*
+secrets/
+keys/
+
+# ── Datos crudos (ficheros grandes, se descargan aparte) ──────────────────────
+data/raw/
+data/*.csv
+data/*.parquet
+data/*.zip
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+
+# ── Jupyter ───────────────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# ── IDEs y editores ───────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ── Orange Data Mining ────────────────────────────────────────────────────────
+# Los .ows se SÍ suben (son los flujos de trabajo)
+# Excluir solo cachés temporales si los hay
+
+# ── Power BI ─────────────────────────────────────────────────────────────────
+# Los .pbix se SÍ suben
+# Excluir cachés locales
+*.pbix.lock
+
+# ── Logs y temporales ─────────────────────────────────────────────────────────
+*.log
+*.tmp
+*.temp
+logs/

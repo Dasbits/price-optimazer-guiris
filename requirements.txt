@@ -1,0 +1,26 @@
+# ── Manipulación y análisis de datos ──────────────────────────────────────────
+pandas
+numpy
+
+# ── Visualización ─────────────────────────────────────────────────────────────
+matplotlib
+seaborn
+
+# ── Google BigQuery ───────────────────────────────────────────────────────────
+google-cloud-bigquery
+google-cloud-bigquery-storage
+pyarrow
+db-dtypes
+
+# ── APIs externas ─────────────────────────────────────────────────────────────
+requests
+
+# ── Utilidades ────────────────────────────────────────────────────────────────
+python-dotenv
+openpyxl
+tqdm
+
+# ── Jupyter ───────────────────────────────────────────────────────────────────
+# Ya instalado globalmente — se incluye aquí solo como referencia
+jupyter
+ipykernel
