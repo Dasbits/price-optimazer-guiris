@@ -149,12 +149,17 @@ No necesita clave. La API es pública bajo licencia CC BY 4.0 y la consume el no
 
 Todos los notebooks se ejecutan desde la carpeta `notebooks/` en VS Code o Jupyter Lab. Ejecuta *Run All* en cada uno y espera a que termine antes de pasar al siguiente.
 
+Cada sección lista los ficheros de **entrada** que el notebook espera encontrar y los de **salida** que genera. Si un input no existe o está en otra ruta, el notebook fallará en la primera celda de carga.
+
 ### 1. `01_descarga_datos.ipynb` · ~2 min
 
 Descarga Open-Meteo y Ticketmaster y guarda los CSVs en `data/raw/`.
 
-- **Requiere previamente:** `.env` con `TICKETMASTER_API_KEY` y los dos CSVs de Inside Airbnb ya colocados en `data/raw/`.
-- **Output esperado:**
+- **Inputs:**
+  - `.env` en la raíz del repo con `TICKETMASTER_API_KEY` rellenada.
+  - `data/raw/listings.csv` (Inside Airbnb, descarga manual — ver sección A).
+  - `data/raw/calendar.csv` (Inside Airbnb, descarga manual — ver sección A).
+- **Outputs:**
   - `data/raw/clima_barcelona.csv` (~400 filas × 7 columnas, con columna `fuente` = `observado` o `climatologia`).
   - `data/raw/eventos_barcelona.csv` (hasta 1000 filas × 8 columnas).
 
@@ -162,14 +167,24 @@ Descarga Open-Meteo y Ticketmaster y guarda los CSVs en `data/raw/`.
 
 EDA completo (fase *Data Understanding* de CRISP-DM). No modifica los datos, solo genera gráficos y observaciones.
 
-- **Output esperado:** prints con volumen/nulos de cada dataset, histogramas, series temporales, correlaciones diarias.
+- **Inputs:**
+  - `data/raw/listings.csv`
+  - `data/raw/calendar.csv`
+  - `data/raw/clima_barcelona.csv` (generado por el notebook 01).
+  - `data/raw/eventos_barcelona.csv` (generado por el notebook 01).
+- **Outputs:** ninguno en disco. Solo prints con volumen/nulos de cada dataset, histogramas, series temporales y correlaciones diarias.
 - **Hallazgo clave a leer en la sección 2:** `available='f'` en Inside Airbnb mezcla *reservado* y *bloqueado por el anfitrión*. Por eso el modelo se limita a las primeras 8 semanas post-scrape (ver notebook 03).
 
 ### 3. `03_limpieza.ipynb` · ~1 min
 
 Fase *Data Preparation*. Aplica limpieza, imputación y filtrado temporal.
 
-- **Output esperado en `data/processed/`:**
+- **Inputs:**
+  - `data/raw/listings.csv`
+  - `data/raw/calendar.csv`
+  - `data/raw/clima_barcelona.csv`
+  - `data/raw/eventos_barcelona.csv`
+- **Outputs en `data/processed/`:**
   - `listings_clean.csv` — 18.172 × 25, 0 nulos.
   - `calendar_clean.csv` — ~1 M filas × 11, filtrado a 8 semanas desde 14/12/2025.
   - `clima_clean.csv` — 56 × 10, con `weather_cat` y `temp_avg`.
@@ -179,11 +194,19 @@ Fase *Data Preparation*. Aplica limpieza, imputación y filtrado temporal.
 
 Join final `calendar ⟕ listings ⟕ clima` en granularidad listing × día.
 
-- **Output esperado:** `data/processed/dataset_integrado.csv` (~1 M filas × 42 columnas, ~190 MB, 0 nulos).
+- **Inputs (todos en `data/processed/`, generados por el notebook 03):**
+  - `listings_clean.csv`
+  - `calendar_clean.csv`
+  - `clima_clean.csv`
+- **Outputs:** `data/processed/dataset_integrado.csv` (~1 M filas × 42 columnas, ~190 MB, 0 nulos).
 
-### 5. `05_modelado.ipynb` · pendiente
+### 5. `05_modelado.ipynb` · ~5-10 min
 
-Baseline de clasificación en scikit-learn (Logistic Regression, Random Forest, Gradient Boosting) antes del trabajo visual en Orange.
+Baseline de clasificación en scikit-learn (Logistic Regression, Random Forest, Gradient Boosting) antes del trabajo visual en Orange. Split train/test por fecha (42 días train, 14 días test).
+
+- **Inputs:** `data/processed/dataset_integrado.csv` (generado por el notebook 04).
+- **Outputs:** ninguno en disco. Prints con métricas (accuracy, F1, AUC), matriz de confusión, curvas ROC y top-20 de feature importance.
+- **Nota anti-leakage:** el notebook excluye `availability_30/60/90/365` y `estimated_occupancy_l365d` por ser proxies directos del target (vienen del propio `calendar.csv`).
 
 ---
 
