@@ -16,6 +16,7 @@ data/raw/
 data/*.csv
 data/*.parquet
 data/*.zip
+dataset_integrado.csv
 
 # ── Python ────────────────────────────────────────────────────────────────────
 __pycache__/

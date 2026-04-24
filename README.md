@@ -214,10 +214,17 @@ Baseline de clasificación en scikit-learn (Logistic Regression, Random Forest, 
 
 Una vez tienes `dataset_integrado.csv`:
 
-1. **Subir a BigQuery** (GUI o script):
+1. **Subir a BigQuery** — dos vías equivalentes:
 
-   - GUI: BigQuery Studio → **Crear dataset** `datos` → **Crear tabla** `fact_ocupacion` → **Subir** el CSV con auto-detectar esquema.
-   - Script: opcional, ver `sql/subir_dataset.py` (pendiente).
+   **Vía A · GUI (rápida, sin reproducibilidad):**
+   BigQuery Studio → **Crear dataset** `datos` (región `EU`) → **Crear tabla** `fact_ocupacion` → **Subir** el CSV con auto-detectar esquema.
+
+   **Vía B · Script Python (reproducible, queda en el repo):**
+   ```bash
+   # Desde la raíz del proyecto, con el venv activado
+   python sql/subir_dataset.py
+   ```
+   El script (`sql/subir_dataset.py`) lee las credenciales de `.env`, crea el dataset `datos` si no existe, y sube el CSV como `<project>.datos.fact_ocupacion` con auto-detección de esquema. Flags opcionales: `--recreate` (borrar tabla antes), `--dataset`, `--table`, `--location`, `--csv`. El script imprime al final el esquema detectado y el nombre completo de la tabla.
 
 2. **Consultas SQL** de ejemplo (carpeta `sql/`):
 
