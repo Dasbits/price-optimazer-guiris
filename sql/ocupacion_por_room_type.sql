@@ -16,7 +16,6 @@
 -- Uso en Power BI:
 --   Tarjetas + treemap o barras apiladas comparando categorías.
 --
--- Autor: Dasbits (IFP España, Big Data e IA, 2025-2026)
 -- =====================================================================
 
 WITH base AS (

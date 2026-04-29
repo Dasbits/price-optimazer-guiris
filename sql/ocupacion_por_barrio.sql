@@ -31,7 +31,6 @@
 --   Filtrar por `segmento` para alternar entre las dos vistas. El visual
 --   recomendado es un mapa coroplético + barras horizontales con top-N.
 --
--- Autor: Dasbits (IFP España, Big Data e IA, 2025-2026)
 -- =====================================================================
 
 WITH base AS (

@@ -17,7 +17,6 @@
 -- Uso en Power BI:
 --   Barras horizontales por categoría + scatter de temperatura vs ocupación.
 --
--- Autor: Dasbits (IFP España, Big Data e IA, 2025-2026)
 -- =====================================================================
 
 WITH ocup_diaria AS (
