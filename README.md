@@ -31,23 +31,30 @@ price-optimazer-guiris/
 │   │   ├── calendar.csv            ← Inside Airbnb
 │   │   ├── clima_barcelona.csv     ← Genera notebook 01
 │   │   └── eventos_barcelona.csv   ← Genera notebook 01
-│   └── processed/                  # Datos limpios (genera notebooks 03-04)
+│   └── processed/                  # Datos limpios (genera notebooks 03-04 y orange/preparar_dataset_orange.py)
 │       ├── listings_clean.csv
 │       ├── calendar_clean.csv
 │       ├── clima_clean.csv
 │       ├── eventos_clean.csv
-│       └── dataset_integrado.csv   ← Entrada del modelo y de Power BI
+│       ├── dataset_integrado.csv   ← Entrada del modelo y de Power BI
+│       ├── train.csv               ← Entrada de Orange (genera el script preparador)
+│       └── test.csv                ← Entrada de Orange (genera el script preparador)
 │
 ├── notebooks/
 │   ├── 01_descarga_datos.ipynb     # Open-Meteo + Ticketmaster
 │   ├── 02_exploracion.ipynb        # EDA
 │   ├── 03_limpieza.ipynb           # Data Preparation
 │   ├── 04_integracion.ipynb        # Join final listing × día
-│   └── 05_modelado.ipynb           # Baseline sklearn (pendiente)
+│   └── 05_modelado.ipynb           # Baseline sklearn
 │
-├── orange/                         # Flujos .ows
+├── orange/                         # Flujos .ows + script preparador
+│   └── preparar_dataset_orange.py  # Genera train.csv y test.csv para Orange
 ├── powerbi/                        # Dashboard .pbix
-├── sql/                            # Consultas BigQuery
+├── sql/                            # Consultas BigQuery + script de subida
+│   ├── subir_dataset.py            # Carga dataset_integrado.csv en BigQuery
+│   ├── ocupacion_por_barrio.sql
+│   ├── ocupacion_por_room_type.sql
+│   └── ocupacion_por_clima.sql
 ├── docs/                           # Entregables del curso (.docx)
 │
 ├── .env.example                    # Plantilla de variables de entorno
@@ -233,6 +240,36 @@ Una vez tienes `dataset_integrado.csv`:
    - `ocupacion_por_clima.sql` — efecto del tiempo sobre la ocupación.
 
 3. **Power BI** → Obtener datos → **Google BigQuery** → autentícate con la cuenta Google → selecciona el proyecto y la tabla → carga → construye el dashboard.
+
+---
+
+## Pipeline visual en Orange Data Mining
+
+Orange replica el modelado del notebook 05 con widgets visuales (sin código). Antes de abrir Orange hay que ejecutar el script preparador, que genera dos CSV con el feature engineering ya aplicado (target encoding por barrio y por listing, anti-leakage, one-hot encoding):
+
+```bash
+# Desde la raíz del proyecto, con el venv activado
+python orange/preparar_dataset_orange.py
+```
+
+Esto genera:
+
+- `data/processed/train.csv` (~758k filas × 56 cols, primeros 42 días).
+- `data/processed/test.csv` (~254k filas × 56 cols, últimos 14 días).
+
+El flujo `orange/pipeline_ocupacion.ows` carga los dos CSV, entrena `Logistic Regression`, `Random Forest` y `Gradient Boosting`, y los evalúa en el `Test and Score` con la opción **Test on test data**. Resultados visuales adicionales en `Confusion Matrix` y `ROC Analysis`.
+
+**Métricas obtenidas** (test = 254.408 filas, evaluadas en `Test and Score`):
+
+| Modelo              | AUC   | CA    | F1    | Precision | Recall | MCC   |
+|---------------------|------:|------:|------:|----------:|-------:|------:|
+| Logistic Regression | 0.891 | 0.787 | 0.785 | 0.807     | 0.787  | 0.595 |
+| **Random Forest**   | **0.895** | **0.812** | **0.812** | **0.814** | 0.812  | **0.627** |
+| Gradient Boosting   | 0.893 | 0.804 | 0.804 | 0.808     | 0.804  | 0.612 |
+
+Los tres modelos cumplen los umbrales del curso (F1 ≥ 0.75, AUC ≥ 0.80) con holgura. Random Forest gana en todas las métricas balanceadas.
+
+**Documentación completa del flujo** — configuración de cada widget, hiperparámetros, lectura de matrices de confusión, explicación didáctica de la curva ROC, comparación con scikit-learn y conclusiones del bloque Modeling: ver [`orange/README.md`](orange/README.md).
 
 ---
 

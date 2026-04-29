@@ -17,6 +17,8 @@ data/*.csv
 data/*.parquet
 data/*.zip
 dataset_integrado.csv
+test.csv
+train.csv
 
 # ── Python ────────────────────────────────────────────────────────────────────
 __pycache__/
