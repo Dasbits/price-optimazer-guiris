@@ -47,9 +47,14 @@ price-optimazer-guiris/
 │   ├── 04_integracion.ipynb        # Join final listing × día
 │   └── 05_modelado.ipynb           # Baseline sklearn
 │
-├── orange/                         # Flujos .ows + script preparador
-│   └── preparar_dataset_orange.py  # Genera train.csv y test.csv para Orange
-├── powerbi/                        # Dashboard .pbix
+├── orange/                         # Flujos .ows + script preparador + capturas
+│   ├── pipeline_ocupacion.ows      # Flujo visual de modelado
+│   ├── preparar_dataset_orange.py  # Genera train.csv y test.csv para Orange
+│   ├── images/                     # Capturas Test and Score, matrices, ROC
+│   └── README.md                   # Documentación detallada del flujo
+├── powerbi/                        # Dashboard .pbix + documentación
+│   ├── dashboard_ocupacion.pbix    # Dashboard final con 3 páginas
+│   └── README.md                   # Documentación detallada del dashboard
 ├── sql/                            # Consultas BigQuery + script de subida
 │   ├── subir_dataset.py            # Carga dataset_integrado.csv en BigQuery
 │   ├── ocupacion_por_barrio.sql
@@ -241,6 +246,14 @@ Una vez tienes `dataset_integrado.csv`:
 
 3. **Power BI** → Obtener datos → **Google BigQuery** → autentícate con la cuenta Google → selecciona el proyecto y la tabla → carga → construye el dashboard.
 
+   El dashboard final (`powerbi/dashboard_ocupacion.pbix`) tiene **tres páginas**:
+
+   - **Visión general** — KPIs (18.172 listings, 1M noches, 54,2 % ocupación, pico 76 %), evolución diaria de la ocupación, ranking de distritos y slicer temporal.
+   - **Mercado** — treemap del peso por tipo de alojamiento, comparativa Navidad vs resto, top 10 barrios con slicer entre "Mercado completo" y "Solo pisos enteros".
+   - **Clima** — efecto del tiempo sobre la ocupación (categoría, temperatura, lluvia), con nota didáctica sobre el confounding temporal.
+
+   **Documentación completa del dashboard** — datasets importados, medidas DAX usadas, descripción visual a visual, hallazgos clave y conclusiones: ver [`powerbi/README.md`](powerbi/README.md).
+
 ---
 
 ## Pipeline visual en Orange Data Mining
@@ -293,8 +306,3 @@ Se aplica **CRISP-DM** (Cross-Industry Standard Process for Data Mining):
 - En `calendar.csv`, `available='f'` no distingue entre *reservado* y *bloqueado por el anfitrión*. Este es el motivo por el que el modelo se limita a 8 semanas desde la fecha del scrape, donde predomina la reserva real frente al bloqueo.
 - Para las fechas del rango del proyecto posteriores a ~5 días antes de hoy, los datos de clima se sustituyen por climatología del año anterior (marcado en la columna `fuente` del CSV).
 
----
-
-## Autor
-
-**Dasbits** — Curso Big Data e IA, IFP España (2025-2026)

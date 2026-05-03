@@ -26,7 +26,6 @@ Flags:
     --out-dir    carpeta de salida          (default: data/processed)
     --split      fecha de corte             (default: 2026-01-25)
 
-Autor: Dasbits (IFP España, Big Data e IA, 2025-2026)
 """
 from __future__ import annotations
 
