@@ -1,308 +1,267 @@
 # Predictor de Ocupación para Apartamentos Turísticos en Barcelona
 
-**Proyecto Final de Especialidad — Big Data e IA | IFP España**
+> **Proyecto Final — Big Data e Inteligencia Artificial · IFP España (2025-2026)**
+>
+> **Repositorio:** https://github.com/Dasbits/price-optimazer-guiris
 
-Modelo de clasificación que predice si un apartamento turístico de Barcelona estará ocupado o libre un día concreto, cruzando datos de Inside Airbnb con clima local (Open-Meteo) y eventos (Ticketmaster).
-
-> **Nota sobre el pivot del proyecto:** el enunciado inicial era predecir el **precio** óptimo por noche. Al analizar el dataset de Inside Airbnb de 14/12/2025 descubrimos que la columna `price` está 100 % vacía (Inside Airbnb dejó de publicarla), así que la variable objetivo se cambió a **ocupación** (binaria: `occupied = 1` si el día aparece como no disponible). Todo el stack y la metodología se mantienen.
-
----
-
-## Stack tecnológico
-
-| Herramienta | Uso |
-|---|---|
-| Python 3.12 (pandas, matplotlib, seaborn, scikit-learn) | Descarga, limpieza, EDA, integración y modelo baseline |
-| Jupyter Notebook | Pipeline reproducible paso a paso |
-| Google BigQuery | Almacenamiento cloud y consultas SQL |
-| Orange Data Mining | Pipeline visual de Machine Learning (entrega final) |
-| Power BI | Dashboard interactivo conectado a BigQuery |
+Modelo de clasificación binaria que predice si un apartamento turístico de Barcelona estará reservado o libre un día concreto, integrando datos de Inside Airbnb, clima (Open-Meteo) y eventos (Ticketmaster), almacenado en Google BigQuery y consumido por un dashboard interactivo en Power BI.
 
 ---
 
-## Estructura del proyecto
+## Tabla de contenido
+
+1. [Resumen / Abstract](#1-resumen--abstract)
+2. [Introducción](#2-introducción)
+3. [Desarrollo del proyecto](#3-desarrollo-del-proyecto-por-orden-cronológico-crisp-dm)
+   - 3.1. [Business Understanding](#31-business-understanding--definición-del-problema-y-pivot-estratégico)
+   - 3.2. [Data Understanding](#32-data-understanding--exploración-y-hallazgos-críticos)
+   - 3.3. [Data Preparation](#33-data-preparation--limpieza-e-integración)
+   - 3.4. [Modeling](#34-modeling--entrenamiento-de-tres-modelos-en-dos-plataformas)
+   - 3.5. [Evaluation](#35-evaluation--métricas-y-comparativa-de-modelos)
+   - 3.6. [Deployment](#36-deployment--bigquery--dashboard-power-bi)
+4. [Conclusiones](#4-conclusiones)
+5. [Bibliografía y referencias](#5-bibliografía-y-referencias)
+6. [Anexos](#6-anexos)
+
+---
+
+## 1. Resumen / Abstract
+
+Este proyecto desarrolla un sistema completo de predicción de ocupación para apartamentos turísticos de Airbnb en Barcelona siguiendo la metodología CRISP-DM en sus seis fases. La tarea es de **clasificación binaria supervisada**: predecir, para cada combinación piso-día, si esa noche estará reservada o bloqueada (`1`) o libre (`0`).
+
+El proyecto se concibió originalmente como un Predictor de Precio Óptimo, pero durante la fase de Data Understanding se descubrió que la columna `price` del dataset Inside Airbnb está completamente vacía desde finales de 2024 por restricciones legales aplicadas por la plataforma. Esta limitación motivó un **pivot estratégico** desde la regresión sobre el precio hacia la clasificación sobre la ocupación, manteniendo intacto el resto del stack tecnológico, la metodología y los entregables.
+
+El dataset final integra **cuatro fuentes heterogéneas** (Inside Airbnb, Open-Meteo, Ticketmaster, festivos catalanes) en una tabla de **1.012.783 filas × 40 columnas**, con granularidad listing × día sobre un horizonte de 56 días (14/12/2025 → 07/02/2026). Sobre este dataset se entrenan, validan y comparan tres modelos de clasificación binaria — **Logistic Regression, Random Forest y Gradient Boosting** — implementados en dos plataformas independientes: scikit-learn (programático) y Orange Data Mining (visual). El modelo ganador es **Random Forest con AUC = 0,895 y F1 = 0,812**, superando con holgura los umbrales mínimos del curso (F1 ≥ 0,75 y AUC ≥ 0,80). La fase de Deployment se materializa en la subida del dataset a **Google BigQuery** y la construcción de un **dashboard interactivo en Power BI Desktop** con tres páginas (Visión general, Mercado, Clima) conectado directamente a la nube.
+
+---
+
+## 2. Introducción
+
+Barcelona es uno de los destinos turísticos más dinámicos de Europa, con un mercado de alquiler vacacional especialmente intenso desde la popularización de plataformas como Airbnb. Comprender los patrones de ocupación de los apartamentos turísticos tiene utilidad práctica para anfitriones independientes (anticipar baja demanda y ajustar precios), gestores profesionales (optimizar limpieza y operaciones), inversores inmobiliarios (estimar rentabilidad esperable) y reguladores municipales (informar políticas urbanísticas).
+
+**Inside Airbnb** es un proyecto de open data que publica scrapes mensuales de los listings de Airbnb por ciudad. Aunque la información es pública, su explotación no es trivial: los datasets son grandes, las columnas relevantes cambian con el tiempo y la naturaleza de los datos (basada en disponibilidad declarada por el anfitrión, no en reservas reales) introduce ambigüedades semánticas que hay que conocer y documentar.
+
+El presente proyecto aborda un caso de uso concreto sobre estos datos: construir un modelo de Machine Learning que prediga, para un piso dado y una fecha dada, si esa noche aparecerá como no disponible en el calendario público de Airbnb. La predicción se enriquece con información meteorológica diaria y con un cruce inicial con eventos culturales y deportivos del área metropolitana, persiguiendo capturar tanto los factores estructurales del listing (ubicación, capacidad, reputación) como los factores coyunturales del día (clima, calendario laboral, temporada turística).
+
+El proyecto se desarrolla siguiendo la metodología estándar **CRISP-DM (Cross-Industry Standard Process for Data Mining)**, que estructura el ciclo de vida de un proyecto analítico en seis fases secuenciales pero iterativas, cada una con sus entregables identificables y reproducibles documentados en el repositorio público.
+
+---
+
+## 3. Desarrollo del proyecto (por orden cronológico, CRISP-DM)
+
+### 3.1. Business Understanding — Definición del problema y pivot estratégico
+
+El enunciado original del proyecto era construir un Predictor de Precio Óptimo para apartamentos turísticos de Barcelona. Tras descargar el scrape del 14 de diciembre de 2025 y realizar la exploración inicial se constató que la columna `price` estaba 100 % vacía en todos los registros, atribuible a restricciones legales aplicadas por Airbnb tras finales de 2024. Esta limitación hizo inviable la tarea de regresión sobre el precio.
+
+Se evaluaron tres alternativas (descartar el dataset, buscar fuentes alternativas de pricing, o redefinir la tarea) y se optó por reformular el objetivo hacia un **Predictor de Ocupación**. La reformulación mantiene intacto el stack tecnológico, las fuentes de datos secundarias, la metodología CRISP-DM y los entregables académicos comprometidos. El cambio se documenta explícitamente en todos los READMEs y entregables previos.
+
+**Variable objetivo definida:** `occupied` — vale 1 si la noche aparece en el calendar de Inside Airbnb con `available='f'` (no disponible) y 0 en caso contrario.
+
+**Métricas de éxito acordadas:** F1-score ≥ 0,75 y AUC-ROC ≥ 0,80 sobre el conjunto de test.
+
+### 3.2. Data Understanding — Exploración y hallazgos críticos
+
+Notebook: `notebooks/02_exploracion.ipynb`.
+
+Se realizó un EDA exhaustivo de las cuatro fuentes integradas:
+
+- **Inside Airbnb (`listings.csv` + `calendar.csv`):** 18.172 listings de Barcelona, ~5,3 millones de filas de calendario sobre 365 días futuros.
+- **Open-Meteo:** serie diaria de temperatura, precipitación y viento.
+- **Ticketmaster Discovery API:** ~1.000 eventos del área metropolitana.
+- **Festivos catalanes:** lista codificada manualmente.
+
+**Tres hallazgos críticos documentados:**
+
+1. **Columna `price` completamente vacía** → motivó el pivot del proyecto.
+2. **Ambigüedad semántica de `available='f'`:** mezcla noches reservadas con noches bloqueadas voluntariamente por el anfitrión sin distinción. En barrios pequeños y residenciales el bloqueo manual contamina la señal de ocupación turística real, motivando la limitación del modelo a las primeras 8 semanas posteriores al scrape.
+3. **Desfase temporal con Ticketmaster:** los eventos disponibles cubrían abril-julio 2026, sin solapamiento con el horizonte del modelo (diciembre 2025-febrero 2026). Decisión: dejar los eventos como tabla auxiliar pero no incorporarlos como feature.
+
+### 3.3. Data Preparation — Limpieza e integración
+
+Notebooks: `notebooks/03_limpieza.ipynb` y `notebooks/04_integracion.ipynb`.
+
+**Limpieza por fuente:**
+
+- Imputación de nulos en `bedrooms` y `bathrooms` por mediana de barrio.
+- Conversión de booleanos textuales `t`/`f` a enteros `1`/`0`.
+- Categorización del weathercode WMO en cuatro categorías (`soleado`, `nublado`, `lluvia`, `extremo`).
+- Filtrado del calendario al horizonte de 56 días.
+- Generación de variables temporales (`dow`, `is_weekend`, `month`, `day`, `week`, `is_holiday`).
+
+**Integración:** join secuencial con pandas en granularidad listing × día. Resultado: `dataset_integrado.csv` con **1.012.783 filas × 40 columnas y cero nulos**.
+
+### 3.4. Modeling — Entrenamiento de tres modelos en dos plataformas
+
+Notebook: `notebooks/05_modelado.ipynb` (scikit-learn) y flujo paralelo en `orange/pipeline_ocupacion.ows` (Orange Data Mining).
+
+**Estrategia de evaluación:** split por fecha (no aleatorio) para simular predicción real. Train = 758.375 filas (42 días), Test = 254.408 filas (14 días). El test cae intencionadamente fuera de la temporada navideña, añadiendo exigencia.
+
+**Feature engineering avanzado:**
+
+- **Eliminación de columnas con leakage:** `availability_30/60/90/365` y `estimated_occupancy_l365d` se descartan por ser proxies directos del target.
+- **Target encoding:** `neigh_enc` (media de ocupación por barrio) y `listing_te` (media por listing), calculados solo con train para evitar leakage hacia test.
+- **One-hot encoding:** de `room_type`, `property_type`, `weather_cat` y `neighbourhood_group_cleansed`.
+
+**Tres modelos entrenados** (mismos hiperparámetros en sklearn y Orange):
+
+- **Logistic Regression** (referencia lineal): Ridge L2, C = 1.
+- **Random Forest** (ensemble por bagging): 200 árboles, max_depth = 15, min_samples_leaf = 5.
+- **Gradient Boosting** (ensemble por boosting iterativo): 200 árboles, learning_rate = 0,10, max_depth = 5.
+
+### 3.5. Evaluation — Métricas y comparativa de modelos
+
+Métricas finales sobre el conjunto de test (254.408 filas):
+
+| Modelo | AUC | F1 | Accuracy | MCC | Cumple umbral |
+|---|---:|---:|---:|---:|:---:|
+| Logistic Regression | 0,891 | 0,785 | 0,787 | 0,595 | Sí |
+| **Random Forest (ganador)** | **0,895** | **0,812** | **0,812** | **0,627** | **Sí** |
+| Gradient Boosting | 0,893 | 0,804 | 0,804 | 0,612 | Sí |
+
+**Matriz de confusión del Random Forest:** 102.473 verdaderos negativos, 104.202 verdaderos positivos, 28.209 falsos positivos y 19.524 falsos negativos. Errores casi simétricos, indicando un modelo equilibrado.
+
+**Curva ROC** (`orange/images/roc_analysis.png`): las tres curvas casi superpuestas en la esquina superior izquierda, lejos de la diagonal aleatoria. Capacidad discriminativa similar y muy alta en los tres modelos.
+
+**Feature importance del Random Forest:** la variable más predictiva es `listing_te` (target encoding por listing) con importancia 0,66 sobre 1,0, capturando la popularidad histórica intrínseca de cada piso.
+
+**Validación cruzada de implementación:** las métricas en sklearn y Orange son virtualmente idénticas para Random Forest y Gradient Boosting, confirmando la consistencia del pipeline en dos plataformas independientes.
+
+### 3.6. Deployment — BigQuery + Dashboard Power BI
+
+**Subida a Google BigQuery:** el script `sql/subir_dataset.py` carga el dataset_integrado.csv a la tabla `price-optimizer-bcn.datos.fact_ocupacion`. Free tier suficiente, conector nativo a Power BI, escalable sin migración.
+
+**Tres queries SQL de KPI** (`sql/ocupacion_por_*.sql`): agregaciones por barrio (con doble segmento), por tipo de alojamiento (con efecto Navidad) y por clima (a nivel día para evitar contaminación con volumen).
+
+**Dashboard Power BI** (`powerbi/dashboard_ocupacion.pbix`) con tres páginas interactivas:
+
+- **Visión general:** KPIs (18.172 listings, 1M noches, 54,2 % ocupación, pico 76 %), serie temporal y ranking de distritos.
+- **Mercado:** treemap por tipo de alojamiento, comparativa Navidad vs resto, top 10 barrios con slicer entre "Mercado completo" y "Solo pisos enteros".
+- **Clima:** efecto del tiempo sobre la ocupación con nota didáctica sobre **confounding temporal** (la correlación lluvia-ocupación está mediada por la fecha de Navidad, no es causalidad directa).
+
+---
+
+## 4. Conclusiones
+
+El proyecto demuestra que es posible construir un sistema completo de predicción de ocupación de apartamentos turísticos integrando múltiples fuentes de datos heterogéneas, aplicando técnicas modernas de Machine Learning, almacenando los resultados en infraestructura cloud y comunicándolos mediante un dashboard interactivo. **Las métricas finales (AUC = 0,895, F1 = 0,812) superan con holgura los umbrales del curso.**
+
+La metodología CRISP-DM resultó clave: la separación entre Business Understanding y Data Understanding permitió detectar tempranamente el problema de la columna `price` vacía y reorientar el proyecto sin desperdiciar trabajo. El feature engineering — especialmente el target encoding por listing y la eliminación de columnas con leakage — fue determinante para alcanzar las métricas reportadas; el algoritmo elegido tuvo menos impacto que la calidad del preprocessing, como demuestra el hecho de que los tres modelos quedaran a menos de 0,03 puntos de F1 entre sí.
+
+La duplicación intencional del pipeline de modelado en scikit-learn y Orange Data Mining no fue redundante: validó la consistencia de los resultados, expuso diferencias sutiles entre implementaciones (especialmente en Logistic Regression por el preprocessing automático de Orange) y produjo una herramienta accesible para audiencias no técnicas.
+
+La feature más importante del modelo final, `listing_te`, es a la vez su mayor fortaleza y su mayor limitación: el modelo funciona excepcionalmente bien para listings con historial pero degradaría su rendimiento ante listings completamente nuevos (escenario de cold start), lo cual define la frontera de aplicabilidad del modelo y abre la línea de trabajo futuro más clara.
+
+**Hallazgo no obvio para destacar:** el dashboard de Clima muestra que los días lluviosos tienen aparentemente mayor ocupación que los secos. No es causalidad sino **confounding temporal**: los días lluviosos del horizonte coinciden con la semana de Navidad, donde la demanda turística sube por motivos completamente independientes del tiempo. Es un buen ejemplo metodológico de que correlación no implica causalidad.
+
+---
+
+## 5. Bibliografía y referencias
+
+### Fuentes de datos
+
+- **Inside Airbnb.** http://insideairbnb.com/get-the-data/ — proyecto open data con scrapes mensuales de listings de Airbnb por ciudad. Scrape utilizado: Barcelona, 14/12/2025.
+- **Open-Meteo.** https://open-meteo.com/en/docs/historical-weather-api — API gratuita de datos meteorológicos históricos con licencia CC BY 4.0.
+- **Ticketmaster Discovery API.** https://developer.ticketmaster.com/products-and-docs/apis/discovery-api/v2/ — API gratuita de eventos.
+
+### Documentación técnica
+
+- **scikit-learn.** https://scikit-learn.org/stable/documentation.html
+- **Orange Data Mining.** https://orangedatamining.com/docs/
+- **Google BigQuery.** https://cloud.google.com/bigquery/docs
+- **Power BI Desktop.** https://learn.microsoft.com/en-us/power-bi/
+- **DAX.** https://learn.microsoft.com/en-us/dax/
+
+### Metodología y conceptos
+
+- Chapman, P. et al. (2000). *CRISP-DM 1.0: Step-by-step data mining guide.* SPSS.
+- Micci-Barreca, D. (2001). *A Preprocessing Scheme for High-Cardinality Categorical Attributes in Classification and Prediction Problems.* ACM SIGKDD Explorations.
+- Breiman, L. (2001). *Random Forests.* Machine Learning, 45(1), 5-32.
+- Friedman, J. H. (2001). *Greedy Function Approximation: A Gradient Boosting Machine.* The Annals of Statistics.
+
+### Asistencia con IA
+
+- Asistencia de **Claude (Anthropic)** para revisión de código, redacción de documentación y verificación metodológica del proyecto.
+
+---
+
+## 6. Anexos
+
+### Estructura del repositorio
 
 ```
 price-optimazer-guiris/
+├── README.md                           # Este documento (manual de usuario)
+├── requirements.txt                    # Dependencias Python
+├── .env.example                        # Plantilla de variables de entorno
+├── .gitignore
 │
-├── data/
-│   ├── raw/                        # Datos originales (NO subidos al repo)
-│   │   ├── listings.csv            ← Inside Airbnb
-│   │   ├── calendar.csv            ← Inside Airbnb
-│   │   ├── clima_barcelona.csv     ← Genera notebook 01
-│   │   └── eventos_barcelona.csv   ← Genera notebook 01
-│   └── processed/                  # Datos limpios (genera notebooks 03-04 y orange/preparar_dataset_orange.py)
-│       ├── listings_clean.csv
-│       ├── calendar_clean.csv
-│       ├── clima_clean.csv
-│       ├── eventos_clean.csv
-│       ├── dataset_integrado.csv   ← Entrada del modelo y de Power BI
-│       ├── train.csv               ← Entrada de Orange (genera el script preparador)
-│       └── test.csv                ← Entrada de Orange (genera el script preparador)
+├── data/                               # Datos (excluidos de Git por tamaño/licencia)
+│   ├── raw/                            # Datos originales descargados
+│   ├── processed/                      # Datos limpios e integrados
+│   └── README.md                       # Documentación de los datos
 │
-├── notebooks/
-│   ├── 01_descarga_datos.ipynb     # Open-Meteo + Ticketmaster
-│   ├── 02_exploracion.ipynb        # EDA
-│   ├── 03_limpieza.ipynb           # Data Preparation
-│   ├── 04_integracion.ipynb        # Join final listing × día
-│   └── 05_modelado.ipynb           # Baseline sklearn
+├── notebooks/                          # 5 notebooks Jupyter en orden de ejecución
+│   ├── 01_descarga_datos.ipynb
+│   ├── 02_exploracion.ipynb
+│   ├── 03_limpieza.ipynb
+│   ├── 04_integracion.ipynb
+│   └── 05_modelado.ipynb
 │
-├── orange/                         # Flujos .ows + script preparador + capturas
-│   ├── pipeline_ocupacion.ows      # Flujo visual de modelado
-│   ├── preparar_dataset_orange.py  # Genera train.csv y test.csv para Orange
-│   ├── images/                     # Capturas Test and Score, matrices, ROC
-│   └── README.md                   # Documentación detallada del flujo
-├── powerbi/                        # Dashboard .pbix + documentación
-│   ├── dashboard_ocupacion.pbix    # Dashboard final con 3 páginas
-│   └── README.md                   # Documentación detallada del dashboard
-├── sql/                            # Consultas BigQuery + script de subida
-│   ├── subir_dataset.py            # Carga dataset_integrado.csv en BigQuery
+├── orange/                             # Pipeline visual de Machine Learning
+│   ├── pipeline_ocupacion.ows
+│   ├── preparar_dataset_orange.py
+│   ├── images/                         # 5 capturas de evaluación
+│   └── README.md
+│
+├── powerbi/                            # Dashboard interactivo
+│   ├── dashboard_ocupacion.pbix
+│   └── README.md
+│
+├── sql/                                # Queries y script de subida a BigQuery
+│   ├── subir_dataset.py
 │   ├── ocupacion_por_barrio.sql
 │   ├── ocupacion_por_room_type.sql
 │   └── ocupacion_por_clima.sql
-├── docs/                           # Entregables del curso (.docx)
 │
-├── .env.example                    # Plantilla de variables de entorno
-├── .gitignore
-├── requirements.txt
-└── README.md
+└── docs/                               # Documentación académica
 ```
 
----
-
-## Configuración del entorno (una sola vez)
-
-### 1. Clonar el repositorio
+### Comandos para reproducir el proyecto
 
 ```bash
-git clone https://github.com/tu-usuario/price-optimazer-guiris.git
+# 1. Clonar repositorio
+git clone https://github.com/Dasbits/price-optimazer-guiris.git
 cd price-optimazer-guiris
-```
 
-### 2. Crear entorno virtual e instalar dependencias
-
-```bash
+# 2. Crear entorno virtual e instalar dependencias
 python -m venv .venv
-# Windows
-.venv\Scripts\activate
-# macOS / Linux
-source .venv/bin/activate
-
+source .venv/bin/activate          # macOS/Linux
+# .venv\Scripts\activate           # Windows
 pip install -r requirements.txt
-```
 
-### 3. Variables de entorno
-
-Copia la plantilla y rellena las claves:
-
-```bash
+# 3. Configurar credenciales
 cp .env.example .env
-```
+# editar .env con TICKETMASTER_API_KEY, BIGQUERY_PROJECT_ID y GOOGLE_APPLICATION_CREDENTIALS
 
-Edita `.env` y ajusta los valores:
+# 4. Descargar manualmente listings.csv y calendar.csv en data/raw/ desde Inside Airbnb
 
-```
-GOOGLE_APPLICATION_CREDENTIALS=credentials.json
-BIGQUERY_PROJECT_ID=price-optimizer-bcn
-TICKETMASTER_API_KEY=tu_consumer_key_aqui
-```
+# 5. Ejecutar notebooks en orden
+jupyter notebook notebooks/
 
-El fichero `.env` está en `.gitignore` y nunca se sube al repo.
-
----
-
-## Obtención de datos y credenciales
-
-### A — Datos de Inside Airbnb (manual)
-
-Inside Airbnb ya no permite URLs directas a sus CSVs. Tienes que bajarlos desde la propia web:
-
-1. Abre https://insideairbnb.com/get-the-data/
-2. Busca la sección **Barcelona, Catalonia, Spain**.
-3. Descarga los dos ficheros:
-   - `listings.csv.gz` (detallado, no el "summary")
-   - `calendar.csv.gz`
-4. Descomprímelos (`.gz`) y colócalos en `data/raw/` con los nombres:
-   - `data/raw/listings.csv`
-   - `data/raw/calendar.csv`
-
-Referencia de versión usada en este proyecto: **scrape del 14/12/2025**. Si bajas uno más nuevo funcionará igual; solo tendrás que actualizar `SCRAPE_DATE` en el notebook 03.
-
-### B — Ticketmaster API Key (gratuita)
-
-1. Entra en https://developer-acct.ticketmaster.com/user/login y crea una cuenta.
-2. Ve a **My Apps → Create App** y rellena el formulario (nombre, descripción breve del proyecto académico).
-3. En la pantalla de la app, copia el valor de **Consumer Key**.
-4. Pégalo en tu `.env` como valor de `TICKETMASTER_API_KEY`.
-
-Plan gratuito: 5000 llamadas/día, máx 200 eventos por página, máx 5 páginas por query. Suficiente de sobra para este proyecto.
-
-### C — Google Cloud / BigQuery (gratuito dentro del free tier)
-
-1. Entra en https://console.cloud.google.com con tu cuenta Google.
-2. Crea un proyecto nuevo llamado `price-optimizer-bcn` (o el nombre que prefieras, ajusta después el `.env`).
-3. En el buscador, busca **BigQuery API** y pulsa **Habilitar**.
-4. Crea una cuenta de servicio:
-   - Menú lateral → **IAM y administración → Cuentas de servicio → Crear cuenta de servicio**.
-   - Nombre: `bigquery-client`.
-   - Rol: **BigQuery Data Editor** + **BigQuery Job User**.
-5. En la cuenta de servicio creada → pestaña **Claves → Añadir clave → Crear clave → JSON**.
-6. Se descarga un fichero `.json`. Renómbralo a `credentials.json` y colócalo en la raíz del proyecto.
-
-El free tier de BigQuery cubre 1 TB de queries/mes y 10 GB de almacenamiento; el dataset completo ocupa <500 MB.
-
-### D — Open-Meteo
-
-No necesita clave. La API es pública bajo licencia CC BY 4.0 y la consume el notebook 01 automáticamente.
-
----
-
-## Orden de ejecución de los notebooks
-
-Todos los notebooks se ejecutan desde la carpeta `notebooks/` en VS Code o Jupyter Lab. Ejecuta *Run All* en cada uno y espera a que termine antes de pasar al siguiente.
-
-Cada sección lista los ficheros de **entrada** que el notebook espera encontrar y los de **salida** que genera. Si un input no existe o está en otra ruta, el notebook fallará en la primera celda de carga.
-
-### 1. `01_descarga_datos.ipynb` · ~2 min
-
-Descarga Open-Meteo y Ticketmaster y guarda los CSVs en `data/raw/`.
-
-- **Inputs:**
-  - `.env` en la raíz del repo con `TICKETMASTER_API_KEY` rellenada.
-  - `data/raw/listings.csv` (Inside Airbnb, descarga manual — ver sección A).
-  - `data/raw/calendar.csv` (Inside Airbnb, descarga manual — ver sección A).
-- **Outputs:**
-  - `data/raw/clima_barcelona.csv` (~400 filas × 7 columnas, con columna `fuente` = `observado` o `climatologia`).
-  - `data/raw/eventos_barcelona.csv` (hasta 1000 filas × 8 columnas).
-
-### 2. `02_exploracion.ipynb` · ~1 min
-
-EDA completo (fase *Data Understanding* de CRISP-DM). No modifica los datos, solo genera gráficos y observaciones.
-
-- **Inputs:**
-  - `data/raw/listings.csv`
-  - `data/raw/calendar.csv`
-  - `data/raw/clima_barcelona.csv` (generado por el notebook 01).
-  - `data/raw/eventos_barcelona.csv` (generado por el notebook 01).
-- **Outputs:** ninguno en disco. Solo prints con volumen/nulos de cada dataset, histogramas, series temporales y correlaciones diarias.
-- **Hallazgo clave a leer en la sección 2:** `available='f'` en Inside Airbnb mezcla *reservado* y *bloqueado por el anfitrión*. Por eso el modelo se limita a las primeras 8 semanas post-scrape (ver notebook 03).
-
-### 3. `03_limpieza.ipynb` · ~1 min
-
-Fase *Data Preparation*. Aplica limpieza, imputación y filtrado temporal.
-
-- **Inputs:**
-  - `data/raw/listings.csv`
-  - `data/raw/calendar.csv`
-  - `data/raw/clima_barcelona.csv`
-  - `data/raw/eventos_barcelona.csv`
-- **Outputs en `data/processed/`:**
-  - `listings_clean.csv` — 18.172 × 25, 0 nulos.
-  - `calendar_clean.csv` — ~1 M filas × 11, filtrado a 8 semanas desde 14/12/2025.
-  - `clima_clean.csv` — 56 × 10, con `weather_cat` y `temp_avg`.
-  - `eventos_clean.csv` — dataset auxiliar (no entra en el modelo por la limitación temporal de Ticketmaster, ver notebook para detalles).
-
-### 4. `04_integracion.ipynb` · ~1 min
-
-Join final `calendar ⟕ listings ⟕ clima` en granularidad listing × día.
-
-- **Inputs (todos en `data/processed/`, generados por el notebook 03):**
-  - `listings_clean.csv`
-  - `calendar_clean.csv`
-  - `clima_clean.csv`
-- **Outputs:** `data/processed/dataset_integrado.csv` (~1 M filas × 42 columnas, ~190 MB, 0 nulos).
-
-### 5. `05_modelado.ipynb` · ~5-10 min
-
-Baseline de clasificación en scikit-learn (Logistic Regression, Random Forest, Gradient Boosting) antes del trabajo visual en Orange. Split train/test por fecha (42 días train, 14 días test).
-
-- **Inputs:** `data/processed/dataset_integrado.csv` (generado por el notebook 04).
-- **Outputs:** ninguno en disco. Prints con métricas (accuracy, F1, AUC), matriz de confusión, curvas ROC y top-20 de feature importance.
-- **Nota anti-leakage:** el notebook excluye `availability_30/60/90/365` y `estimated_occupancy_l365d` por ser proxies directos del target (vienen del propio `calendar.csv`).
-
----
-
-## Subida a BigQuery y uso en Power BI
-
-Una vez tienes `dataset_integrado.csv`:
-
-1. **Subir a BigQuery** — dos vías equivalentes:
-
-   **Vía A · GUI (rápida, sin reproducibilidad):**
-   BigQuery Studio → **Crear dataset** `datos` (región `EU`) → **Crear tabla** `fact_ocupacion` → **Subir** el CSV con auto-detectar esquema.
-
-   **Vía B · Script Python (reproducible, queda en el repo):**
-   ```bash
-   # Desde la raíz del proyecto, con el venv activado
-   python sql/subir_dataset.py
-   ```
-   El script (`sql/subir_dataset.py`) lee las credenciales de `.env`, crea el dataset `datos` si no existe, y sube el CSV como `<project>.datos.fact_ocupacion` con auto-detección de esquema. Flags opcionales: `--recreate` (borrar tabla antes), `--dataset`, `--table`, `--location`, `--csv`. El script imprime al final el esquema detectado y el nombre completo de la tabla.
-
-2. **Consultas SQL** de ejemplo (carpeta `sql/`):
-
-   - `ocupacion_por_barrio.sql` — KPI por barrio.
-   - `ocupacion_por_room_type.sql` — KPI por tipo de alojamiento.
-   - `ocupacion_por_clima.sql` — efecto del tiempo sobre la ocupación.
-
-3. **Power BI** → Obtener datos → **Google BigQuery** → autentícate con la cuenta Google → selecciona el proyecto y la tabla → carga → construye el dashboard.
-
-   El dashboard final (`powerbi/dashboard_ocupacion.pbix`) tiene **tres páginas**:
-
-   - **Visión general** — KPIs (18.172 listings, 1M noches, 54,2 % ocupación, pico 76 %), evolución diaria de la ocupación, ranking de distritos y slicer temporal.
-   - **Mercado** — treemap del peso por tipo de alojamiento, comparativa Navidad vs resto, top 10 barrios con slicer entre "Mercado completo" y "Solo pisos enteros".
-   - **Clima** — efecto del tiempo sobre la ocupación (categoría, temperatura, lluvia), con nota didáctica sobre el confounding temporal.
-
-   **Documentación completa del dashboard** — datasets importados, medidas DAX usadas, descripción visual a visual, hallazgos clave y conclusiones: ver [`powerbi/README.md`](powerbi/README.md).
-
----
-
-## Pipeline visual en Orange Data Mining
-
-Orange replica el modelado del notebook 05 con widgets visuales (sin código). Antes de abrir Orange hay que ejecutar el script preparador, que genera dos CSV con el feature engineering ya aplicado (target encoding por barrio y por listing, anti-leakage, one-hot encoding):
-
-```bash
-# Desde la raíz del proyecto, con el venv activado
+# 6. Generar CSVs para Orange (opcional)
 python orange/preparar_dataset_orange.py
+
+# 7. Subir a BigQuery (opcional, requiere credenciales)
+python sql/subir_dataset.py
+
+# 8. Abrir orange/pipeline_ocupacion.ows con Orange Data Mining
+# 9. Abrir powerbi/dashboard_ocupacion.pbix con Power BI Desktop
 ```
 
-Esto genera:
+### Documentos de referencia complementarios
 
-- `data/processed/train.csv` (~758k filas × 56 cols, primeros 42 días).
-- `data/processed/test.csv` (~254k filas × 56 cols, últimos 14 días).
-
-El flujo `orange/pipeline_ocupacion.ows` carga los dos CSV, entrena `Logistic Regression`, `Random Forest` y `Gradient Boosting`, y los evalúa en el `Test and Score` con la opción **Test on test data**. Resultados visuales adicionales en `Confusion Matrix` y `ROC Analysis`.
-
-**Métricas obtenidas** (test = 254.408 filas, evaluadas en `Test and Score`):
-
-| Modelo              | AUC   | CA    | F1    | Precision | Recall | MCC   |
-|---------------------|------:|------:|------:|----------:|-------:|------:|
-| Logistic Regression | 0.891 | 0.787 | 0.785 | 0.807     | 0.787  | 0.595 |
-| **Random Forest**   | **0.895** | **0.812** | **0.812** | **0.814** | 0.812  | **0.627** |
-| Gradient Boosting   | 0.893 | 0.804 | 0.804 | 0.808     | 0.804  | 0.612 |
-
-Los tres modelos cumplen los umbrales del curso (F1 ≥ 0.75, AUC ≥ 0.80) con holgura. Random Forest gana en todas las métricas balanceadas.
-
-**Documentación completa del flujo** — configuración de cada widget, hiperparámetros, lectura de matrices de confusión, explicación didáctica de la curva ROC, comparación con scikit-learn y conclusiones del bloque Modeling: ver [`orange/README.md`](orange/README.md).
+- **Memoria final completa:** `docs/memoria_final_predictor_ocupacion_barcelona.docx` (17 capítulos, ~40 páginas).
+- **README detallado de Orange:** `orange/README.md` (configuración de widgets, lectura de matrices, explicación didáctica de la curva ROC).
+- **README detallado de Power BI:** `powerbi/README.md` (datasets, medidas DAX, descripción visual a visual de las tres páginas).
+- **Capturas de los resultados de Orange:** `orange/images/` (Test and Score, tres matrices de confusión, ROC).
 
 ---
-
-## Metodología
-
-Se aplica **CRISP-DM** (Cross-Industry Standard Process for Data Mining):
-
-1. **Business Understanding** — documentado en `docs/entrega1_predictor_ocupacion_barcelona.docx`.
-2. **Data Understanding** — notebook 02.
-3. **Data Preparation** — notebooks 03 y 04.
-4. **Modeling** — notebook 05 (sklearn) + Orange Data Mining.
-5. **Evaluation** — métricas F1, AUC, matriz de confusión.
-6. **Deployment** — dashboard en Power BI sobre BigQuery.
-
----
-
-## Limitaciones conocidas
-
-- **Ticketmaster** solo expone eventos futuros desde el momento de la llamada, por lo que no hay solapamiento con el horizonte del modelo (Dic 2025 – Feb 2026). La columna `n_eventos` no se integra en `dataset_integrado.csv`; se mantiene el fichero `eventos_clean.csv` como tabla auxiliar para BigQuery/Power BI.
-- **Inside Airbnb** ya no publica la columna `price`, lo que forzó el pivot del proyecto de regresión (precio) a clasificación (ocupación).
-- En `calendar.csv`, `available='f'` no distingue entre *reservado* y *bloqueado por el anfitrión*. Este es el motivo por el que el modelo se limita a 8 semanas desde la fecha del scrape, donde predomina la reserva real frente al bloqueo.
-- Para las fechas del rango del proyecto posteriores a ~5 días antes de hoy, los datos de clima se sustituyen por climatología del año anterior (marcado en la columna `fuente` del CSV).
-
